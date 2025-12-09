@@ -12,7 +12,7 @@
     <style>
         :root {
             /* Palette */
-            --primary: #6366f1; /* Indigo 500 */
+            --primary: #6366f1;
             --primary-hover: #4f46e5;
             --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             --surface: #ffffff;
@@ -20,8 +20,6 @@
             --text-muted: #6b7280;
             --border-light: #f3f4f6;
             --danger: #ef4444;
-            --highlight-bg: #fff1f2;
-            --highlight-border: #e11d48;
             
             /* Spacing & Radius */
             --radius-md: 12px;
@@ -102,7 +100,6 @@
         button.priority-btn.active { color: #f59e0b; }
         button.priority-btn:hover { color: #f59e0b; transform: scale(1.1); }
 
-        /* --- ICONS --- */
         svg { width: 1.2em; height: 1.2em; fill: currentColor; }
 
         /* --- SECTIONS --- */
@@ -116,11 +113,7 @@
             transition: transform 0.2s, box-shadow 0.2s;
         }
         
-        .section.dragging-section {
-            opacity: 0.4;
-            transform: scale(0.98);
-            box-shadow: var(--shadow-lg);
-        }
+        .section.dragging-section { opacity: 0.4; transform: scale(0.98); box-shadow: var(--shadow-lg); }
 
         .section-header {
             display: flex; align-items: center; 
@@ -130,8 +123,7 @@
         }
 
         .section-drag-handle {
-            cursor: grab; color: #d1d5db; margin-right: 8px;
-            padding: 4px; border-radius: 4px;
+            cursor: grab; color: #d1d5db; margin-right: 8px; padding: 4px; border-radius: 4px;
         }
         .section-drag-handle:hover { background: #f3f4f6; color: var(--text-main); }
         .section-drag-handle:active { cursor: grabbing; }
@@ -139,13 +131,12 @@
         .section-title-input {
             flex-grow: 1; font-weight: 700; font-size: 1.05rem; 
             border: 1px solid transparent; background: transparent; 
-            padding: 4px 8px; margin: 0 4px; border-radius: 4px;
-            color: var(--text-main);
+            padding: 4px 8px; margin: 0 4px; border-radius: 4px; color: var(--text-main);
         }
         .section-title-input:focus { outline: none; background: #f9fafb; border-color: #e5e7eb; }
 
         /* --- TASKS --- */
-        .task-list { list-style: none; padding: 0; margin: 0; min-height: 20px; }
+        .task-list { list-style: none; padding: 0; margin: 0; min-height: 40px; }
         
         .task-item {
             display: flex; align-items: center; 
@@ -156,44 +147,30 @@
         }
         .task-item:last-child { border-bottom: none; }
         .task-item:hover { background: #f9fafb; }
-        
-        .task-item.high-priority { 
-            background: #fffbf0; /* Subtle orange tint */
-            border-left: 3px solid #f59e0b;
-        }
+        .task-item.high-priority { background: #fffbf0; border-left: 3px solid #f59e0b; }
 
-        .task-drag-handle { 
-            cursor: grab; color: #e5e7eb; margin-right: 12px; display: flex; 
-        }
+        .task-drag-handle { cursor: grab; color: #e5e7eb; margin-right: 12px; display: flex; padding: 4px;}
         .task-item:hover .task-drag-handle { color: #9ca3af; }
         .task-drag-handle:active { cursor: grabbing; }
 
         .task-text { flex-grow: 1; margin: 0 12px; font-size: 0.95rem; line-height: 1.5; }
         .completed { text-decoration: line-through; color: #9ca3af; }
 
-        /* --- INPUT AREA --- */
+        /* --- INPUT --- */
         .add-task-row { padding: 16px 20px; border-top: 1px solid var(--border-light); background: #fafafa; }
         .add-task-row input { 
-            width: 100%; 
-            border: 1px solid #e5e7eb; 
-            border-radius: var(--radius-sm); 
-            padding: 10px 14px; 
-            font-size: 0.95rem;
-            box-shadow: var(--shadow-sm);
-            outline: none;
-            transition: all 0.2s;
-            box-sizing: border-box;
+            width: 100%; border: 1px solid #e5e7eb; border-radius: var(--radius-sm); 
+            padding: 10px 14px; font-size: 0.95rem; box-shadow: var(--shadow-sm); outline: none; 
+            transition: all 0.2s; box-sizing: border-box;
         }
-        .add-task-row input:focus { 
-            border-color: var(--primary); 
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); 
-        }
+        .add-task-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1); }
 
-        /* --- VISUAL INDICATORS --- */
+        /* --- DROP INDICATORS --- */
         .drop-target-top { border-top: 2px solid var(--primary) !important; }
         .drop-target-bottom { border-bottom: 2px solid var(--primary) !important; }
-        .section-drop-target-top { border-top: 3px solid var(--primary); margin-top: -3px; }
-        .section-drop-target-bottom { border-bottom: 3px solid var(--primary); margin-bottom: -3px; }
+        
+        /* When dragging a Task over a Section (appending) */
+        .section-task-drop-target { border: 2px dashed var(--primary); background: #eef2ff; }
 
     </style>
 </head>
@@ -250,8 +227,8 @@
         const [isVerified, setIsVerified] = useState(false);
         const [isSaving, setIsSaving] = useState(false);
         
-        // Drag state now includes 'type' to distinguish Task vs Section drag
-        const [draggedItem, setDraggedItem] = useState(null); // { type: 'TASK'|'SECTION', ...data }
+        // DnD State
+        const [draggedItem, setDraggedItem] = useState(null); 
         const [dropTarget, setDropTarget] = useState(null);
 
         // --- Init ---
@@ -267,7 +244,6 @@
             if (handle) { setFileHandle(handle); setIsVerified(false); }
         };
 
-        // --- Persistence ---
         useEffect(() => { localStorage.setItem('myDailyTasks', JSON.stringify(sections)); }, [sections]);
 
         useEffect(() => {
@@ -299,7 +275,6 @@
             return content;
         };
 
-        // --- File Actions ---
         const connectFile = async (forceNew = false) => {
             try {
                 if (!forceNew && fileHandle) {
@@ -364,7 +339,6 @@
         const addTask = (secIdx, text) => {
             if(!text.trim()) return;
             const newS = [...sections];
-            // CHANGE: Push to bottom instead of unshift
             newS[secIdx].tasks.push({ id: Date.now(), text, completed: false, priority: false });
             setSections(newS);
         };
@@ -383,9 +357,9 @@
 
         // --- Drag & Drop Core ---
         const handleDragStart = (e, type, payload) => {
+            e.stopPropagation(); // Prevent Drag start bubbling
             setDraggedItem({ type, ...payload });
             
-            // Visual Styles for Dragging
             setTimeout(() => {
                 const target = type === 'SECTION' 
                     ? e.target 
@@ -400,61 +374,80 @@
             setDropTarget(null);
         };
 
-        const handleDragOver = (e, type, indexPayload) => {
-            e.preventDefault();
+        const handleDragOver = (e, type, payload) => {
+            e.preventDefault(); 
+            e.stopPropagation(); // CRITICAL: Stop section from capturing task hovers
+
             if (!draggedItem) return;
 
-            // Prevent Task dragging into Section slots and vice versa
-            if (draggedItem.type !== type) return;
+            // 1. Reordering Sections
+            if (draggedItem.type === 'SECTION' && type === 'SECTION') {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const midpoint = (rect.bottom - rect.top) / 2;
+                const position = (e.clientY - rect.top) < midpoint ? 'top' : 'bottom';
+                
+                setDropTarget(prev => {
+                    if(prev?.type === 'SECTION' && prev.secIndex === payload.secIndex && prev.position === position) return prev;
+                    return { type: 'SECTION', secIndex: payload.secIndex, position };
+                });
+            }
 
-            const rect = e.currentTarget.getBoundingClientRect();
-            const midpoint = (rect.bottom - rect.top) / 2;
-            const position = (e.clientY - rect.top) < midpoint ? 'top' : 'bottom';
-            
-            const newTarget = { type, ...indexPayload, position };
-            
-            setDropTarget(prev => {
-                // De-bouncing update to prevent flicker
-                if(prev && 
-                   prev.type === type && 
-                   prev.secIndex === newTarget.secIndex && 
-                   prev.taskIndex === newTarget.taskIndex && 
-                   prev.position === position) return prev;
-                return newTarget;
-            });
+            // 2. Reordering Tasks (Dragging Task over Task)
+            else if (draggedItem.type === 'TASK' && type === 'TASK') {
+                 // Prevent dragging across sections if you prefer, but here we allow it
+                const rect = e.currentTarget.getBoundingClientRect();
+                const midpoint = (rect.bottom - rect.top) / 2;
+                const position = (e.clientY - rect.top) < midpoint ? 'top' : 'bottom';
+
+                setDropTarget(prev => {
+                    if(prev?.type === 'TASK' && prev.secIndex === payload.secIndex && prev.taskIndex === payload.taskIndex && prev.position === position) return prev;
+                    return { type: 'TASK', secIndex: payload.secIndex, taskIndex: payload.taskIndex, position };
+                });
+            }
+
+            // 3. Dragging Task over Section Container (Append to Section)
+            else if (draggedItem.type === 'TASK' && type === 'SECTION') {
+                setDropTarget(prev => {
+                    // secIndex is target, taskIndex -1 means "append to end"
+                    if(prev?.type === 'TASK' && prev.secIndex === payload.secIndex && prev.taskIndex === -1) return prev;
+                    return { type: 'TASK', secIndex: payload.secIndex, taskIndex: -1, position: 'bottom' };
+                });
+            }
         };
 
         const handleDrop = (e) => {
             e.preventDefault();
+            e.stopPropagation(); // Stop bubbling
+            
             if (!draggedItem || !dropTarget) return;
 
-            // SECTION REORDERING
+            // Handle Section Move
             if (draggedItem.type === 'SECTION' && dropTarget.type === 'SECTION') {
                 const newS = [...sections];
                 const [movedSec] = newS.splice(draggedItem.secIndex, 1);
-                
                 let targetIdx = dropTarget.secIndex;
                 if (dropTarget.position === 'bottom') targetIdx++;
                 if (draggedItem.secIndex < targetIdx) targetIdx--;
-                
                 newS.splice(targetIdx, 0, movedSec);
                 setSections(newS);
             }
             
-            // TASK MOVING
+            // Handle Task Move
             else if (draggedItem.type === 'TASK' && dropTarget.type === 'TASK') {
                 const newS = [...sections];
                 const { sourceSecIndex, itemIndex } = draggedItem;
+                
+                // Remove from source
                 const [movedItem] = newS[sourceSecIndex].tasks.splice(itemIndex, 1);
                 
+                // Add to target
                 let targetIdx = dropTarget.taskIndex;
-                
-                if (dropTarget.taskIndex === -1) {
-                    // Dropped on empty section header -> push to end
+                if(dropTarget.taskIndex === -1) {
+                    // Appending to section
                     newS[dropTarget.secIndex].tasks.push(movedItem);
                 } else {
                     if (dropTarget.position === 'bottom') targetIdx++;
-                    // Adjustment if moving down within same list
+                    // Correction for same-list drop
                     if (sourceSecIndex === dropTarget.secIndex && itemIndex < targetIdx) targetIdx--; 
                     newS[dropTarget.secIndex].tasks.splice(targetIdx, 0, movedItem);
                 }
@@ -463,7 +456,6 @@
             
             handleDragEnd();
         };
-
 
         return (
             <div className="app-wrapper">
@@ -495,16 +487,24 @@
                 </div>
 
                 {sections.map((section, sIdx) => {
-                    // Calculate Section Drop Visual
+                    // Visual logic for Section Drops
                     let secStyle = {};
+                    let dropClass = '';
+                    
+                    // Case A: Dropping a Section Reorder
                     if(dropTarget && dropTarget.type === 'SECTION' && dropTarget.secIndex === sIdx) {
                          secStyle = dropTarget.position === 'top' ? { borderTop: '3px solid var(--primary)' } : { borderBottom: '3px solid var(--primary)' };
+                    }
+                    
+                    // Case B: Dragging a Task over a Section (Append mode)
+                    if(dropTarget && dropTarget.type === 'TASK' && dropTarget.secIndex === sIdx && dropTarget.taskIndex === -1) {
+                        dropClass = 'section-task-drop-target';
                     }
 
                     return (
                         <div 
                             key={section.id} 
-                            className="section" 
+                            className={`section ${dropClass}`}
                             style={secStyle}
                             draggable
                             onDragStart={(e) => handleDragStart(e, 'SECTION', { secIndex: sIdx })}
@@ -512,20 +512,12 @@
                             onDrop={handleDrop}
                             onDragEnd={handleDragEnd}
                         >
-                            <div className="section-header" 
-                                 onDragOver={(e) => {
-                                    // Allow dropping tasks onto header to add to empty section
-                                    if(draggedItem?.type === 'TASK') handleDragOver(e, 'TASK', { secIndex: sIdx, taskIndex: -1 });
-                                 }}
-                                 onDrop={(e) => {
-                                     if(draggedItem?.type === 'TASK') handleDrop(e);
-                                 }}
-                            >
+                            <div className="section-header">
                                 <div className="section-drag-handle"><Icons.Grip /></div>
                                 <button className="icon-btn" onClick={() => { const newS = [...sections]; newS[sIdx].collapsed = !newS[sIdx].collapsed; setSections(newS); }}>
                                     {section.collapsed ? <Icons.CaretRight /> : <Icons.CaretDown />}
                                 </button>
-                                <input className="section-title-input" value={section.title} onChange={(e) => { const newS = [...sections]; newS[sIdx].title = e.target.value; setSections(newS); }}/>
+                                <input className="section-title-input" value={section.title} onChange={(e) => { const newS = [...sections]; newS[sIdx].title = e.target.value; setSections(newS); }} onClick={(e) => e.stopPropagation()}/>
                                 <button className="icon-btn danger" onClick={() => deleteSection(sIdx)}>
                                     <Icons.Trash />
                                 </button>
@@ -535,12 +527,12 @@
                                 <>
                                     <ul className="task-list">
                                         {section.tasks.map((task, tIdx) => {
-                                            let dropClass = '';
+                                            let taskDropClass = '';
                                             if (dropTarget && dropTarget.type === 'TASK' && dropTarget.secIndex === sIdx && dropTarget.taskIndex === tIdx) {
-                                                dropClass = dropTarget.position === 'top' ? 'drop-target-top' : 'drop-target-bottom';
+                                                taskDropClass = dropTarget.position === 'top' ? 'drop-target-top' : 'drop-target-bottom';
                                             }
                                             return (
-                                                <li key={task.id} className={`task-item ${task.priority ? 'high-priority' : ''} ${dropClass}`} 
+                                                <li key={task.id} className={`task-item ${task.priority ? 'high-priority' : ''} ${taskDropClass}`} 
                                                     onDragOver={(e) => handleDragOver(e, 'TASK', { secIndex: sIdx, taskIndex: tIdx })}
                                                     onDrop={handleDrop}
                                                 >
@@ -557,11 +549,7 @@
                                             );
                                         })}
                                         {section.tasks.length === 0 && (
-                                            <div 
-                                                style={{padding:'30px', textAlign:'center', color:'#9ca3af', fontStyle:'italic'}}
-                                                onDragOver={(e) => handleDragOver(e, 'TASK', { secIndex: sIdx, taskIndex: -1 })}
-                                                onDrop={handleDrop}
-                                            >
+                                            <div style={{padding:'30px', textAlign:'center', color:'#9ca3af', fontStyle:'italic'}}>
                                                 Drop tasks here
                                             </div>
                                         )}
