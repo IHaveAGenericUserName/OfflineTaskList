@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager (Offline)</title>
+    
+    <script src="./dependencies/react.js"></script>
+    <script src="./dependencies/react-dom.js"></script>
+    <script src="./dependencies/babel.js"></script>
+
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --bg: #f1f5f9;
+            --surface: #ffffff;
+            --text: #334155;
+            --border: #e2e8f0;
+            --highlight: #fff7ed;
+            --highlight-border: #f97316;
+            --drag-line: #4f46e5;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 40px 20px;
+            margin: 0;
+        }
+
+        .app-wrapper { max-width: 800px; margin: 0 auto; }
+        h1 { text-align: center; color: var(--primary); margin-bottom: 25px; }
+
+        /* Controls */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .status-indicator { display: flex; align-items: center; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .dot.green { background: #22c55e; box-shadow: 0 0 0 2px #dcfce7; }
+        .dot.orange { background: #f97316; box-shadow: 0 0 0 2px #ffedd5; }
+        .dot.grey { background: #94a3b8; }
+
+        button {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            transition: all 0.2s;
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+        button:hover { background: #f8fafc; }
+        button.primary { background: var(--primary); color: white; border-color: var(--primary); }
+        button.primary:hover { background: #4338ca; }
+        button.danger { color: #ef4444; border-color: #fee2e2; }
+        button.danger:hover { background: #fef2f2; }
+
+        button.icon-btn { padding: 6px; border: none; background: transparent; color: #94a3b8; }
+        button.icon-btn:hover { color: var(--primary); background: #f1f5f9; }
+        
+        button.priority-btn { color: #cbd5e1; }
+        button.priority-btn.active { color: #f97316; }
+
+        /* SVG Icon Sizing */
+        svg { width: 1.2em; height: 1.2em; fill: currentColor; }
+        button.icon-btn svg { width: 1.4em; height: 1.4em; }
+
+        /* Sections */
+        .section {
+            background: var(--surface);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        .section-header {
+            display: flex; align-items: center; padding: 10px 12px;
+            background: #f8fafc; border-bottom: 1px solid var(--border);
+        }
+        .section-title-input {
+            flex-grow: 1; font-weight: 600; font-size: 1rem; border: none; background: transparent; margin: 0 10px;
+        }
+        .section-title-input:focus { outline: none; }
+
+        /* Tasks */
+        .task-list { list-style: none; padding: 0; margin: 0; min-height: 10px; }
+        
+        .task-item {
+            display: flex; align-items: center; padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            background: white;
+            transition: background 0.2s;
+            position: relative;
+        }
+        .task-item:last-child { border-bottom: none; }
+        .task-item.high-priority { background: var(--highlight); border-left: 4px solid var(--highlight-border); padding-left: 8px; }
+
+        .task-text { flex-grow: 1; margin: 0 12px; font-size: 0.95rem; }
+        .completed { text-decoration: line-through; color: #94a3b8; }
+
+        /* Drag Visuals */
+        .drag-handle { cursor: grab; color: #cbd5e1; padding: 4px; display: flex; align-items: center; }
+        .drag-handle:active { cursor: grabbing; color: var(--text); }
+        .task-item.dragging { opacity: 0.4; background: #f1f5f9; }
+        .drop-target-top { border-top: 2px solid var(--drag-line) !important; }
+        .drop-target-bottom { border-bottom: 2px solid var(--drag-line) !important; }
+        
+        .add-task-row { padding: 10px 16px; border-top: 1px solid var(--border); }
+        .add-task-row input { width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 8px; box-sizing: border-box; }
+
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- ICON COMPONENTS (SVG Inline) ---
+    const Icons = {
+        Plus: () => <svg viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg>,
+        Trash: () => <svg viewBox="0 0 256 256"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>,
+        CaretRight: () => <svg viewBox="0 0 256 256"><path d="M181.66,133.66l-80,80A8,8,0,0,1,88,208V48a8,8,0,0,1,13.66-5.66l80,80A8,8,0,0,1,181.66,133.66Z"/></svg>,
+        CaretDown: () => <svg viewBox="0 0 256 256"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,48,88H208a8,8,0,0,1,5.66,13.66Z"/></svg>,
+        X: () => <svg viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>,
+        Dots: () => <svg viewBox="0 0 256 256"><path d="M92,60a12,12,0,1,1-12-12A12,12,0,0,1,92,60Zm0,68a12,12,0,1,1-12-12A12,12,0,0,1,92,128Zm0,68a12,12,0,1,1-12-12A12,12,0,0,1,92,196Qm164,48a12,12,0,1,0,12,12A12,12,0,0,0,164,48Zm0,68a12,12,0,1,0,12,12A12,12,0,0,0,164,116Zm0,68a12,12,0,1,0,12,12A12,12,0,0,0,164,184Z"/></svg>,
+        Link: () => <svg viewBox="0 0 256 256"><path d="M136.37,180.24a48,48,0,0,1-67.88-67.88l18.34-18.35a8,8,0,0,1,11.32,11.32L79.8,123.68a32,32,0,1,0,45.25,45.25l18.35-18.34a8,8,0,0,1,11.32,11.32ZM201.14,54.86a48,48,0,0,0-67.88,0L114.91,73.2a8,8,0,0,0,11.32,11.31l18.35-18.34a32,32,0,0,1,45.25,45.25l-18.34,18.35a8,8,0,0,0,11.32,11.32l18.34-18.35A48,48,0,0,0,201.14,54.86Z"/></svg>,
+        Upload: () => <svg viewBox="0 0 256 256"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66-85.66a8,8,0,0,0-11.32,0l-40,40a8,8,0,0,0,11.32,11.32L120,72.31V152a8,8,0,0,0,16,0V72.31l37.66,37.35a8,8,0,0,0,11.32-11.32Z"/></svg>,
+        Connect: () => <svg viewBox="0 0 256 256"><path d="M227.32,76.69l-48-48a8,8,0,0,0-11.32,0l-6.62,6.62L134.06,8.06a8,8,0,0,0-11.31,0l-16,16a8,8,0,0,0,0,11.31L128,56.69,114.34,70.34,50.34,6.34A8,8,0,0,0,39,17.66l44.69,44.68L17.66,128.34a8,8,0,0,0,0,11.32l48,48a8,8,0,0,0,11.32,0L142.94,121.7l64,64a8,8,0,0,0,11.31,0l16-16a8,8,0,0,0,0-11.31l-27.26-27.26,21.37-21.37A8,8,0,0,0,227.32,76.69Zm-156,104-36.68-36.68L84,94.63l36.69,36.68Zm120-40L154.63,104l36.68-36.69,36.69,36.69Z"/></svg>,
+        Bolt: () => <svg viewBox="0 0 256 256"><path d="M160,16a8,8,0,0,0-7.22,4.59l-47.53,99H48a8,8,0,0,0-7.22,11.41l56,112a8,8,0,0,0,14.44-7.22L97.58,160H160a8,8,0,0,0,7.22-11.41l-40-80h40a8,8,0,0,0,7.22-11.41l-16-32A8,8,0,0,0,160,16Zm-24.89,128H96a8,8,0,0,0-7.22,11.41l13.11,26.21L56.45,136H104a8,8,0,0,0,7.22-11.41l-13.11-26.21L143.55,80H96a8,8,0,0,0-7.22,11.41l13.11,26.21L64.45,152H112a8,8,0,0,0,7.22-11.41l-13.11-26.21L151.55,96H120Z" style={{fillRule:'nonzero'}}/></svg>,
+        BoltFill: () => <svg viewBox="0 0 256 256"><path d="M215.22,92.59l-16-32A8,8,0,0,0,192,56H152l40-80a8,8,0,0,0-14.44-7.22l-128,240a8,8,0,0,0,14.44,7.22L96,160h64a8,8,0,0,0,7.22-11.41l-40-80H160A8,8,0,0,0,215.22,92.59Z"/></svg>
+    };
+
+    // --- IndexedDB Helper ---
+    const DB_NAME = 'TaskAppDB';
+    const STORE_NAME = 'handles';
+
+    const getFileHandle = async () => {
+        return new Promise((resolve) => {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onupgradeneeded = (e) => e.target.result.createObjectStore(STORE_NAME);
+            request.onsuccess = (e) => {
+                const db = e.target.result;
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const req = store.get('tasksFile');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            };
+            request.onerror = () => resolve(null);
+        });
+    };
+
+    const saveFileHandle = async (handle) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onsuccess = (e) => {
+            const db = e.target.result;
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put(handle, 'tasksFile');
+        };
+    };
+
+    function App() {
+        const [sections, setSections] = useState([]);
+        const [fileHandle, setFileHandle] = useState(null);
+        const [isVerified, setIsVerified] = useState(false);
+        const [isSaving, setIsSaving] = useState(false);
+        
+        const [draggedItem, setDraggedItem] = useState(null);
+        const [dropTarget, setDropTarget] = useState(null);
+
+        // --- Init ---
+        useEffect(() => {
+            const savedData = localStorage.getItem('myDailyTasks');
+            if (savedData) setSections(JSON.parse(savedData));
+            else setSections([{ id: 'default', title: 'To Do', collapsed: false, tasks: [] }]);
+            checkForExistingHandle();
+        }, []);
+
+        const checkForExistingHandle = async () => {
+            const handle = await getFileHandle();
+            if (handle) {
+                setFileHandle(handle);
+                setIsVerified(false);
+            }
+        };
+
+        // --- Persistence ---
+        useEffect(() => {
+            localStorage.setItem('myDailyTasks', JSON.stringify(sections));
+        }, [sections]);
+
+        useEffect(() => {
+            if (!fileHandle || !isVerified) return;
+            const saveData = async () => {
+                setIsSaving(true);
+                try {
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(generateMD(sections));
+                    await writable.close();
+                } catch (err) {
+                    if (err.name === 'NotAllowedError') setIsVerified(false);
+                } finally { setIsSaving(false); }
+            };
+            const debounce = setTimeout(saveData, 1000);
+            return () => clearTimeout(debounce);
+        }, [sections, fileHandle, isVerified]);
+
+        const generateMD = (data) => {
+            let content = "";
+            data.forEach(sec => {
+                content += `## ${sec.title}\n`;
+                sec.tasks.forEach(t => {
+                    const priorityMark = t.priority ? " (!)" : "";
+                    content += `- [${t.completed ? 'x' : ' '}] ${t.text}${priorityMark}\n`;
+                });
+                content += `\n`;
+            });
+            return content;
+        };
+
+        // --- File Actions ---
+        const connectFile = async (forceNew = false) => {
+            try {
+                if (!forceNew && fileHandle) {
+                    const permission = await fileHandle.requestPermission({ mode: 'readwrite' });
+                    if (permission === 'granted') {
+                         setIsVerified(true);
+                         const writable = await fileHandle.createWritable();
+                         await writable.write(generateMD(sections));
+                         await writable.close();
+                         return;
+                    }
+                }
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: 'tasks.md',
+                    types: [{ description: 'Markdown', accept: {'text/markdown': ['.md']} }],
+                });
+                setFileHandle(handle);
+                saveFileHandle(handle);
+                setIsVerified(true);
+            } catch (err) { console.log("Cancelled"); }
+        };
+
+        const loadFromFile = async () => {
+            try {
+                const [handle] = await window.showOpenFilePicker({
+                    types: [{ description: 'Markdown', accept: {'text/markdown': ['.md']} }],
+                });
+                const file = await handle.getFile();
+                const text = await file.text();
+                
+                const lines = text.split('\n');
+                const newSections = [];
+                let currentSec = { id: Date.now(), title: "Imported", collapsed: false, tasks: [] };
+                
+                lines.forEach((line, i) => {
+                    const trim = line.trim();
+                    if (trim.startsWith('##')) {
+                        if (currentSec.tasks.length || currentSec.title !== "Imported") newSections.push(currentSec);
+                        currentSec = { id: Date.now()+i, title: trim.replace(/^##\s+/, ''), collapsed: false, tasks: [] };
+                    } else if (trim.startsWith('- [')) {
+                        const isHigh = line.includes('(!)');
+                        const cleanText = trim.replace(/- \[[x ]\]\s/, '').replace('(!)', '').trim();
+                        currentSec.tasks.push({ 
+                            id: Date.now()+i, 
+                            text: cleanText, 
+                            completed: trim.includes('- [x]'),
+                            priority: isHigh 
+                        });
+                    }
+                });
+                newSections.push(currentSec);
+                
+                setSections(newSections);
+                setFileHandle(handle);
+                saveFileHandle(handle);
+                const perm = await handle.requestPermission({ mode: 'readwrite' });
+                if(perm === 'granted') setIsVerified(true);
+            } catch (err) { console.error(err); }
+        };
+
+        // --- Render Status ---
+        const renderStatus = () => {
+            if (!fileHandle) {
+                return (
+                    <>
+                        <div className="status-indicator"><span className="dot grey"></span><span style={{color: '#64748b'}}>Not Connected</span></div>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <button onClick={loadFromFile}><Icons.Upload /> Load</button>
+                            <button onClick={() => connectFile(true)} className="primary"><Icons.Link /> Connect New</button>
+                        </div>
+                    </>
+                );
+            }
+            if (!isVerified) {
+                return (
+                    <>
+                        <div className="status-indicator"><span className="dot orange"></span><span style={{color: '#f97316'}}><strong>{fileHandle.name}</strong> (Paused)</span></div>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <button onClick={() => connectFile(false)} className="primary"><Icons.Connect /> Reconnect</button>
+                            <button onClick={() => connectFile(true)}>Switch File</button>
+                        </div>
+                    </>
+                );
+            }
+            return (
+                <>
+                    <div className="status-indicator"><span className="dot green"></span><span style={{color: '#166534'}}><strong>{fileHandle.name}</strong> {isSaving ? '(Saving...)' : '(Active)'}</span></div>
+                    <button onClick={() => connectFile(true)}>Switch File</button>
+                </>
+            );
+        };
+
+        // --- Task Logic ---
+        const addTask = (secIdx, text) => {
+            if(!text.trim()) return;
+            const newS = [...sections];
+            newS[secIdx].tasks.unshift({ id: Date.now(), text, completed: false, priority: false });
+            setSections(newS);
+        };
+        const toggleTask = (secIdx, tIdx) => {
+            const newS = [...sections]; newS[secIdx].tasks[tIdx].completed = !newS[secIdx].tasks[tIdx].completed; setSections(newS);
+        };
+        const togglePriority = (secIdx, tIdx) => {
+            const newS = [...sections]; newS[secIdx].tasks[tIdx].priority = !newS[secIdx].tasks[tIdx].priority; setSections(newS);
+        };
+        const deleteItem = (secIdx, tIdx) => {
+            const newS = [...sections]; newS[secIdx].tasks.splice(tIdx, 1); setSections(newS);
+        };
+        
+        // --- Drag Logic ---
+        const handleDragStart = (e, item, sourceSecIndex, itemIndex) => {
+            setDraggedItem({ item, sourceSecIndex, itemIndex });
+            e.target.closest('.task-item').classList.add('dragging');
+        };
+        const handleDragEnd = (e) => {
+            document.querySelector('.dragging')?.classList.remove('dragging');
+            setDraggedItem(null); setDropTarget(null);
+        };
+        const handleDragOver = (e, secIndex, taskIndex) => {
+            e.preventDefault();
+            if (!draggedItem) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const midpoint = (rect.bottom - rect.top) / 2;
+            const position = (e.clientY - rect.top) < midpoint ? 'top' : 'bottom';
+            setDropTarget(prev => {
+                if(prev && prev.secIndex === secIndex && prev.taskIndex === taskIndex && prev.position === position) return prev;
+                return { secIndex, taskIndex, position };
+            });
+        };
+        const handleSectionDragOver = (e, secIndex) => {
+            e.preventDefault();
+            if(sections[secIndex].tasks.length === 0) setDropTarget({ secIndex, taskIndex: -1, position: 'bottom' });
+        };
+        const handleDrop = (e) => {
+            e.preventDefault();
+            if (!draggedItem || !dropTarget) return;
+            const newS = [...sections];
+            const { sourceSecIndex, itemIndex } = draggedItem;
+            const [movedItem] = newS[sourceSecIndex].tasks.splice(itemIndex, 1);
+            let targetIdx = dropTarget.taskIndex;
+            if(targetIdx === -1) {
+                newS[dropTarget.secIndex].tasks.push(movedItem);
+            } else {
+                if (dropTarget.position === 'bottom') targetIdx++;
+                if (sourceSecIndex === dropTarget.secIndex && itemIndex < targetIdx) targetIdx--; 
+                newS[dropTarget.secIndex].tasks.splice(targetIdx, 0, movedItem);
+            }
+            setSections(newS); setDraggedItem(null); setDropTarget(null);
+        };
+
+        return (
+            <div className="app-wrapper">
+                <h1>Daily Task Manager</h1>
+                <div className="status-bar">{renderStatus()}</div>
+
+                {sections.map((section, sIdx) => (
+                    <div key={section.id} className="section" onDragOver={(e) => handleSectionDragOver(e, sIdx)} onDrop={handleDrop}>
+                        <div className="section-header">
+                            <button className="icon-btn" onClick={() => { const newS = [...sections]; newS[sIdx].collapsed = !newS[sIdx].collapsed; setSections(newS); }}>
+                                {section.collapsed ? <Icons.CaretRight /> : <Icons.CaretDown />}
+                            </button>
+                            <input className="section-title-input" value={section.title} onChange={(e) => { const newS = [...sections]; newS[sIdx].title = e.target.value; setSections(newS); }}/>
+                            <button className="icon-btn danger" onClick={() => { if(confirm("Delete section?")) { const newS=[...sections]; newS.splice(sIdx,1); setSections(newS); }}}>
+                                <Icons.Trash />
+                            </button>
+                        </div>
+                        {!section.collapsed && (
+                            <>
+                                <ul className="task-list">
+                                    {section.tasks.map((task, tIdx) => {
+                                        let dropClass = '';
+                                        if (dropTarget && dropTarget.secIndex === sIdx && dropTarget.taskIndex === tIdx) {
+                                            dropClass = dropTarget.position === 'top' ? 'drop-target-top' : 'drop-target-bottom';
+                                        }
+                                        return (
+                                            <li key={task.id} className={`task-item ${task.priority ? 'high-priority' : ''} ${dropClass}`} onDragOver={(e) => handleDragOver(e, sIdx, tIdx)}>
+                                                <div className="drag-handle" draggable onDragStart={(e) => handleDragStart(e, task, sIdx, tIdx)} onDragEnd={handleDragEnd}>
+                                                    <Icons.Dots />
+                                                </div>
+                                                <input type="checkbox" checked={task.completed} onChange={() => toggleTask(sIdx, tIdx)} style={{margin:'0 10px', width:'16px', height:'16px'}}/>
+                                                <span className={`task-text ${task.completed ? 'completed' : ''}`}>{task.text}</span>
+                                                <button className={`icon-btn priority-btn ${task.priority ? 'active' : ''}`} onClick={() => togglePriority(sIdx, tIdx)} title="Toggle Priority">
+                                                    {task.priority ? <Icons.BoltFill /> : <Icons.Bolt />}
+                                                </button>
+                                                <button className="icon-btn" onClick={() => deleteItem(sIdx, tIdx)}><Icons.X /></button>
+                                            </li>
+                                        );
+                                    })}
+                                    {section.tasks.length === 0 && <div style={{padding:'20px', textAlign:'center', color:'#94a3b8', fontSize:'0.9rem'}}>Drag tasks here.</div>}
+                                </ul>
+                                <div className="add-task-row">
+                                    <input type="text" placeholder="Add task..." onKeyPress={(e) => { if(e.key==='Enter') { addTask(sIdx, e.target.value); e.target.value=''; }}}/>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                ))}
+                <div style={{textAlign:'right'}}>
+                    <button onClick={() => setSections([...sections, {id: Date.now(), title:'New Section', collapsed:false, tasks:[]}])}>
+                        <Icons.Plus /> Add Section
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+
+</body>
+</html>
